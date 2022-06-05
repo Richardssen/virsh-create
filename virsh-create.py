@@ -90,7 +90,7 @@ settings.DRY = args.dry
 # Variable definition #
 #######################
 # define some variables
-lv_name = 'vm_%s' % args.name
+lv_name = f'vm_{args.name}'
 src_guest = config.get(args.section, 'src_guest')
 public_bridge = config.get(args.section, 'public_bridge')
 public_mac = config.get(args.section, 'public_mac')
@@ -204,7 +204,7 @@ for path in template.getDiskPaths():
     else:
         # copy data from local volume
         log.info("Copying LV %s to %s", path, new_path)
-        ex(['dd', 'if=%s' % path, 'of=%s' % new_path, 'bs=4M'])
+        ex(['dd', f'if={path}', f'of={new_path}', 'bs=4M'])
 
 ############################
 # Define domain in libvirt #
@@ -217,7 +217,7 @@ if not settings.DRY:
 #####################
 # MODIFY FILESYSTEM #
 #####################
-sed_ex = 's/%s/%s/g' % (src_guest, args.name)
+sed_ex = f's/{src_guest}/{args.name}/g'
 
 bootdisk = domain.getBootDisk()
 with process.mount(src_guest, lv_name, bootdisk, bootdisk_path):

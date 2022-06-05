@@ -38,15 +38,14 @@ def mount(frm, lv_name, bootdisk, bootdisk_path):
     log.info('Detecting logical volumes')
     with setting(SLEEP=3):
         ex(['kpartx', '-s', '-a', bootdisk])  # Discover partitions on bootdisk
-        ex(['vgrename', 'vm_%s' % frm, lv_name])  # Rename volume group
+        ex(['vgrename', f'vm_{frm}', lv_name])
         ex(['vgchange', '-a', 'y', lv_name])  # Activate volume group
 
     log.info('Mounting logical volumes...')
-    mounted = []
     ex(['mount', os.path.join('/dev', lv_name, 'root'), settings.CHROOT])
-    mounted.append(settings.CHROOT)
+    mounted = [settings.CHROOT]
     for dir in ['boot', 'home', 'usr', 'var', 'tmp']:
-        dev = '/dev/%s/%s' % (lv_name, dir)
+        dev = f'/dev/{lv_name}/{dir}'
         if os.path.exists(dev):
             mytarget = os.path.join(settings.CHROOT, dir)
             ex(['mount', dev, mytarget])
@@ -114,15 +113,15 @@ def update_ips(*, src_public_ip4, public_ip4, src_priv_ip4, priv_ip4, src_public
     log.info('Update IP addresses')
     eth0 = 'etc/network/interfaces.d/eth0'
     eth1 = 'etc/network/interfaces.d/eth1'
-    ex(['sed', '-i', 's/%s/%s/g' % (src_public_ip4, public_ip4), eth0])
-    ex(['sed', '-i', 's/%s/%s/g' % (src_priv_ip4, priv_ip4), eth1])
-    ex(['sed', '-i', 's/%s/%s/g' % (src_public_ip6, public_ip6), eth0])
-    ex(['sed', '-i', 's/%s/%s/g' % (src_priv_ip6, priv_ip6), eth1])
+    ex(['sed', '-i', f's/{src_public_ip4}/{public_ip4}/g', eth0])
+    ex(['sed', '-i', f's/{src_priv_ip4}/{priv_ip4}/g', eth1])
+    ex(['sed', '-i', f's/{src_public_ip6}/{public_ip6}/g', eth0])
+    ex(['sed', '-i', f's/{src_priv_ip6}/{priv_ip6}/g', eth1])
 
 
 def prepare_sshd(src_priv_ip6, priv_ip6):
     log.info('Preparing SSH daemon')
-    ex(['sed', '-i', 's/%s/%s/g' % (src_priv_ip6, priv_ip6), 'etc/ssh/sshd_config'])
+    ex(['sed', '-i', f's/{src_priv_ip6}/{priv_ip6}/g', 'etc/ssh/sshd_config'])
     log.debug('- rm /etc/ssh/ssh_host_*')
     ex(['rm'] + glob.glob('etc/ssh/ssh_host_*'), quiet=True)
     ex(['ssh-keygen', '-t', 'ed25519', '-f', 'etc/ssh/ssh_host_ed25519_key', '-N', ''])
@@ -136,26 +135,26 @@ def prepare_sshd(src_priv_ip6, priv_ip6):
 def prepare_munin(src_priv_ip6, priv_ip6):
     log.info('Preparing munin-node')
     path = 'etc/munin/munin-node.conf'
-    ex(['sed', '-i', 's/^host %s/host %s/g' % (src_priv_ip6, priv_ip6), path])
+    ex(['sed', '-i', f's/^host {src_priv_ip6}/host {priv_ip6}/g', path])
 
 
 def prepare_munin_tls(key, pem):
     path = 'etc/munin/munin-node.conf'
     ex(['sed', '-i', 's/^#tls/tls/', path])
-    ex(['sed', '-i', 's~^tls_private_key.*~tls_private_key %s~' % key, path])
-    ex(['sed', '-i', 's~^tls_certificate.*~tls_certificate %s~' % pem, path])
+    ex(['sed', '-i', f's~^tls_private_key.*~tls_private_key {key}~', path])
+    ex(['sed', '-i', f's~^tls_certificate.*~tls_certificate {pem}~', path])
 
 
 def prepare_cga(frm, name):
     log.info('Prepare cgabackup...')
     cga_config = 'etc/cgabackup/client.conf'
-    ex(['sed', '-i', 's/backup-cga-%s/backup-cga-%s/' % (frm, name), cga_config])
+    ex(['sed', '-i', f's/backup-cga-{frm}/backup-cga-{name}/', cga_config])
     ex(['sed', '-i', 's/\/backup\/cga\/%s/\/backup\/cga\/%s/' % (frm, name), cga_config])
 
     # randomize the backup-time a bit:
     hour = random.choice(range(1, 8))
-    minute = random.choice(range(0, 60))
-    ex(['sed', '-i', 's/^0 5/%s %s/' % (minute, hour), 'etc/cron.d/cgabackup'])
+    minute = random.choice(range(60))
+    ex(['sed', '-i', f's/^0 5/{minute} {hour}/', 'etc/cron.d/cgabackup'])
 
 
 def update_grub(sed_ex):
@@ -180,7 +179,7 @@ def install_extra(extra):
 def create_ssh_client_keys(name):
     log.info('Generate SSH client keys')
     rsa, ed25519 = '/root/.ssh/id_rsa', '/root/.ssh/id_ed25519'
-    rsa_pub, ed25519_pub = '%s.pub' % rsa, '%s.pub' % ed25519
+    rsa_pub, ed25519_pub = f'{rsa}.pub', f'{ed25519}.pub'
 
     # remove any prexisting SSH keys
     chroot(['rm', '-f', rsa, rsa_pub, ed25519, ed25519_pub])
@@ -191,7 +190,7 @@ def create_ssh_client_keys(name):
 
     # Fix hostname
     for pub in [rsa_pub, ed25519_pub]:
-        chroot(['sed', '-i', 's/@[^@]*$/@%s/' % name, pub])  # fix hostname in public keys
+        chroot(['sed', '-i', f's/@[^@]*$/@{name}/', pub])
 
 
 def cleanup_homes():
@@ -217,20 +216,20 @@ def cleanup_homes():
 
 def create_tls_cert(name, ca_host, ca_serial):
     log.info('Generate TLS certificate')
-    key = '/etc/ssl/private/%s.local.key' % name
-    pem = '/etc/ssl/public/%s.local.pem' % name
-    csr = '/etc/ssl/%s.local.csr' % name
+    key = f'/etc/ssl/private/{name}.local.key'
+    pem = f'/etc/ssl/public/{name}.local.pem'
+    csr = f'/etc/ssl/{name}.local.csr'
     ssl_cert_gid = get_chroot_gid('ssl-cert')
 
-    sign = 'fsinf-ca sign_cert --alt=%s.local --watch=<your email>' % name
+    sign = f'fsinf-ca sign_cert --alt={name}.local --watch=<your email>'
     if ca_serial:
-        sign += ' --ca=%s' % ca_serial
+        sign += f' --ca={ca_serial}'
 
     with gid(ssl_cert_gid), umask(0o277):
         chroot(['openssl', 'genrsa', '-out', key, '4096'])
 
     chroot(['openssl', 'req', '-new', '-key', key, '-out', csr, '-utf8', '-batch', '-sha256', ])
-    log.critical('On %s, do:' % ca_host)
+    log.critical(f'On {ca_host}, do:')
     log.critical('\t%s' % sign)
     csr_path = os.path.join(settings.CHROOT, csr.lstrip('/'))
     if settings.DRY:
